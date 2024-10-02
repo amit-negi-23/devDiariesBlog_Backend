@@ -123,25 +123,55 @@ const getPostsByTitle = (data, page, limit) => {
   });
 };
 
-const getAllUsedLabelsByUser = async (userId) => {
-  return new Promise(async (resolve, reject) => {
-    try {
-      // console.log(userId)
-      const userLabels = await Post.aggregate([
-        { $match: { userId: userId } },
-        { $unwind: "$labels" },
-        { $group: { _id: null, userLabels: { $addToSet: "$labels" } } },
-        { $project: { _id: 0, userLabels: 1 } },
-      ]);
+// const getAllUsedLabelsByUser = async (userId) => {
+//   return new Promise(async (resolve, reject) => {
+//     try {
+//       // console.log(userId)
+//       const userLabels = await Post.aggregate([
+//         { $match: { userId: userId } },
+//         { $unwind: "$labels" },
+//         { $group: { _id: null, userLabels: { $addToSet: "$labels" } } },
+//         { $project: { _id: 0, userLabels: 1 } },
+//       ]);
 
-      // console.log(userLabels);
-      resolve(userLabels.length ? userLabels[0].userLabels : []);
-    } catch (error) {
-      // console.error('Error fetching unique labels:', error);
-      reject(error);
-    }
-  });
+//       // console.log(userLabels);
+//       resolve(userLabels.length ? userLabels[0].userLabels : []);
+//     } catch (error) {
+//       // console.error('Error fetching unique labels:', error);
+//       reject(error);
+//     }
+//   });
+// };
+
+const getAllUsedLabelsByUser = async (userId) => {
+  try {
+    const userLabels = await Post.aggregate([
+      { $match: { userId: userId } },  // Match posts by userId
+      { $unwind: "$labels" },  // Unwind labels array
+      {
+        $lookup: {
+          from: "labels",  // The collection name (should match Label model's collection)
+          localField: "labels",  // Field from Post that holds label ObjectIds
+          foreignField: "_id",  // Field from Label that holds ObjectIds
+          as: "labelDetails",  // Populated label details
+        },
+      },
+      { $unwind: "$labelDetails" },  // Unwind the populated label details
+      {
+        $group: {
+          _id: null,
+          uniqueLabels: { $addToSet: "$labelDetails" },  // Group by unique label details
+        },
+      },
+      { $project: { _id: 0, uniqueLabels: 1 } },  // Project only the unique labels
+    ]);
+
+    return userLabels.length ? userLabels[0].uniqueLabels : [];
+  } catch (error) {
+    throw new Error("Error fetching labels: " + error.message);
+  }
 };
+
 
 const searchPostByLabel = (data) => {
   return new Promise(async (resolve, reject) => {
